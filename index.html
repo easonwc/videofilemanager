@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; media-src 'self' file:; img-src 'self' data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Video Manager</title>
+  <link rel="stylesheet" href="renderer/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <div id="toolbar-left">
+        <button id="btn-select-folder">📁 Select Folder</button>
+        <span id="folder-path">No folder selected</span>
+      </div>
+      <div id="toolbar-center">
+        <input type="text" id="search-input" placeholder="Search by name..." />
+      </div>
+      <div id="toolbar-right">
+        <select id="sort-select">
+          <option value="name">Sort: Name</option>
+          <option value="size">Sort: Size</option>
+          <option value="duration">Sort: Duration</option>
+          <option value="quality">Sort: Quality</option>
+          <option value="ext">Sort: Type</option>
+        </select>
+        <select id="filter-quality">
+          <option value="all">All Quality</option>
+          <option value="4K">4K</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="480p">480p</option>
+          <option value="SD">SD</option>
+          <option value="Unknown">Unknown</option>
+        </select>
+        <select id="filter-ext">
+          <option value="all">All Types</option>
+          <option value=".mp4">.mp4</option>
+          <option value=".mkv">.mkv</option>
+          <option value=".avi">.avi</option>
+          <option value=".mov">.mov</option>
+          <option value=".wmv">.wmv</option>
+          <option value=".flv">.flv</option>
+          <option value=".webm">.webm</option>
+        </select>
+        <select id="filter-favorites">
+          <option value="all">All Videos</option>
+          <option value="favorites">Favorites Only</option>
+        </select>
+        <button id="btn-duplicates">🔍 Duplicates</button>
+        <button id="btn-view-list" class="view-btn active" title="List View">☰</button>
+        <button id="btn-view-grid" class="view-btn" title="Grid View">⊞</button>
+      </div>
+    </div>
+
+    <!-- Action bar -->
+    <div id="action-bar">
+      <span id="selected-count">0 selected</span>
+      <button id="btn-rename-uuid" disabled>🔀 Rename to UUID</button>
+      <button id="btn-delete" disabled>🗑 Delete</button>
+      <button id="btn-select-all">Select All</button>
+      <button id="btn-deselect-all">Deselect All</button>
+      <span id="status-msg"></span>
+    </div>
+
+    <!-- Content -->
+    <div id="content">
+      <div id="video-list" class="view-list"></div>
+      <div id="video-grid" class="view-grid hidden"></div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loading" class="hidden">
+      <div class="spinner"></div>
+      <p id="loading-text">Scanning videos...</p>
+    </div>
+  </div>
+
+  <!-- Video Player Modal -->
+  <div id="player-modal" class="hidden">
+    <div id="player-backdrop"></div>
+    <div id="player-container">
+      <div id="player-header">
+        <span id="player-title"></span>
+        <button id="player-close">✕</button>
+      </div>
+      <video id="video-player" controls autoplay></video>
+      <div id="player-nav">
+        <button id="btn-prev">◀ Prev</button>
+        <span id="player-index"></span>
+        <button id="btn-next">Next ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duplicates Modal -->
+  <div id="duplicates-modal" class="hidden">
+    <div id="dup-backdrop"></div>
+    <div id="dup-container">
+      <div id="dup-header">
+        <h2>Duplicate Videos</h2>
+        <button id="dup-close">✕</button>
+      </div>
+      <div id="dup-content"></div>
+    </div>
+  </div>
+
+  <script src="renderer/app.js"></script>
+</body>
+</html>
