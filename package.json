@@ -1,6 +1,6 @@
 {
   "name": "video-manager",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Local video file manager",
   "author": "William C Eason II <willeason2@gmail.com>",
   "main": "main.js",

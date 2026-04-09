@@ -7,8 +7,62 @@ let selectedPaths = new Set();
 let favorites = new Set();
 let currentFolder = null;
 let currentView = 'list'; // 'list' | 'grid'
-let thumbnailCache = {};
+let thumbnailCache = {};  // in-memory cache (path -> base64)
 let currentPlayerIndex = -1;
+
+// --- Thumbnail concurrency queue ---
+const THUMB_CONCURRENCY = 5;
+let thumbActiveCount = 0;
+const thumbQueue = [];
+
+function enqueueThumbnail(filePath, imgEl) {
+  // Already in memory cache
+  if (thumbnailCache[filePath]) {
+    imgEl.src = thumbnailCache[filePath];
+    return;
+  }
+  thumbQueue.push({ filePath, imgEl });
+  drainThumbQueue();
+}
+
+function drainThumbQueue() {
+  while (thumbActiveCount < THUMB_CONCURRENCY && thumbQueue.length > 0) {
+    const { filePath, imgEl } = thumbQueue.shift();
+    // Skip if img element is no longer in the DOM (card was re-rendered)
+    if (!imgEl.isConnected) { drainThumbQueue(); return; }
+    thumbActiveCount++;
+    window.api.getThumbnail(filePath).then(data => {
+      thumbActiveCount--;
+      if (data) {
+        thumbnailCache[filePath] = data;
+        if (imgEl.isConnected) imgEl.src = data;
+      } else {
+        if (imgEl.isConnected) imgEl.classList.add('no-thumb');
+      }
+      drainThumbQueue();
+    });
+  }
+}
+
+// --- IntersectionObserver for lazy thumbnail loading ---
+let thumbObserver = null;
+
+function setupThumbObserver() {
+  if (thumbObserver) thumbObserver.disconnect();
+  thumbObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const imgEl = entry.target;
+        const filePath = imgEl.dataset.path;
+        if (filePath && !imgEl.dataset.queued) {
+          imgEl.dataset.queued = '1';
+          thumbObserver.unobserve(imgEl);
+          enqueueThumbnail(filePath, imgEl);
+        }
+      }
+    });
+  }, { rootMargin: '200px' }); // pre-load 200px before entering viewport
+}
 
 // --- DOM refs ---
 const btnSelectFolder = document.getElementById('btn-select-folder');
@@ -70,6 +124,8 @@ async function loadVideos() {
   showLoading('Scanning videos...');
   selectedPaths.clear();
   thumbnailCache = {};
+  thumbQueue.length = 0; // clear pending queue
+  thumbActiveCount = 0;
   try {
     allVideos = await window.api.scanFolder(currentFolder);
     applyFiltersAndRender();
@@ -230,6 +286,8 @@ function renderGrid() {
   videoGridEl.innerHTML = '';
   if (filteredVideos.length === 0) return;
 
+  setupThumbObserver();
+
   filteredVideos.forEach((v, i) => {
     const card = document.createElement('div');
     card.className = 'grid-card' + (selectedPaths.has(v.path) ? ' selected' : '');
@@ -237,7 +295,7 @@ function renderGrid() {
 
     card.innerHTML = `
       <div class="grid-thumb-wrap">
-        <img class="grid-thumb" src="" data-path="${v.path}" alt="thumbnail" />
+        <img class="grid-thumb" data-path="${v.path}" alt="thumbnail" />
         <div class="grid-play-overlay" data-index="${i}">▶</div>
         <div class="grid-fav-btn ${favorites.has(v.path) ? 'fav-active' : ''}" data-path="${v.path}">★</div>
       </div>
@@ -253,8 +311,15 @@ function renderGrid() {
 
     videoGridEl.appendChild(card);
 
-    // Load thumbnail lazily
-    loadThumbnail(v.path, card.querySelector('.grid-thumb'));
+    const imgEl = card.querySelector('.grid-thumb');
+
+    // If already in memory cache, set immediately — no observer needed
+    if (thumbnailCache[v.path]) {
+      imgEl.src = thumbnailCache[v.path];
+    } else {
+      // Observe for lazy loading
+      thumbObserver.observe(imgEl);
+    }
 
     // Card click = select/deselect
     card.addEventListener('click', (e) => {
@@ -279,21 +344,6 @@ function renderGrid() {
       toggleFavorite(e.target.dataset.path);
     });
   });
-}
-
-async function loadThumbnail(filePath, imgEl) {
-  if (thumbnailCache[filePath]) {
-    imgEl.src = thumbnailCache[filePath];
-    return;
-  }
-  const data = await window.api.getThumbnail(filePath);
-  if (data) {
-    thumbnailCache[filePath] = data;
-    imgEl.src = data;
-  } else {
-    imgEl.src = '';
-    imgEl.classList.add('no-thumb');
-  }
 }
 
 // --- View toggle ---

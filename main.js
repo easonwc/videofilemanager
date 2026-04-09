@@ -7,9 +7,15 @@ const ffmpegPath = require('ffmpeg-static');
 const { v4: uuidv4 } = require('uuid');
 
 const FAVORITES_FILE = path.join(app.getPath('userData'), 'favorites.json');
+const THUMB_CACHE_DIR = path.join(app.getPath('userData'), 'thumbnails');
 
 let mainWindow;
 let folderWatcher = null;
+
+// Ensure thumbnail cache directory exists
+app.whenReady().then(() => {
+  if (!fs.existsSync(THUMB_CACHE_DIR)) fs.mkdirSync(THUMB_CACHE_DIR, { recursive: true });
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -138,28 +144,59 @@ ipcMain.handle('scan-folder', async (_, folderPath) => {
   return results;
 });
 
-// --- Thumbnail extraction ---
+// --- Thumbnail extraction (with disk cache) ---
+function thumbCachePath(filePath) {
+  // Use a hash of the file path as the cache filename
+  let hash = 0;
+  for (let i = 0; i < filePath.length; i++) {
+    hash = ((hash << 5) - hash) + filePath.charCodeAt(i);
+    hash |= 0;
+  }
+  return path.join(THUMB_CACHE_DIR, `${Math.abs(hash)}.jpg`);
+}
+
 ipcMain.handle('get-thumbnail', async (_, filePath) => {
+  const cachePath = thumbCachePath(filePath);
+
+  // Return from disk cache if it exists
+  if (fs.existsSync(cachePath)) {
+    try {
+      const data = fs.readFileSync(cachePath);
+      return 'data:image/jpeg;base64,' + data.toString('base64');
+    } catch (e) {}
+  }
+
+  // Extract via ffmpeg and save to disk cache
   return new Promise((resolve) => {
-    const tmpFile = path.join(app.getPath('temp'), `thumb_${uuidv4()}.jpg`);
     execFile(ffmpegPath, [
       '-ss', '7',
       '-i', filePath,
       '-frames:v', '1',
       '-q:v', '2',
+      '-vf', 'scale=320:-1',
       '-y',
-      tmpFile
+      cachePath
     ], (err) => {
-      if (err || !fs.existsSync(tmpFile)) return resolve(null);
+      if (err || !fs.existsSync(cachePath)) return resolve(null);
       try {
-        const data = fs.readFileSync(tmpFile);
-        fs.unlinkSync(tmpFile);
+        const data = fs.readFileSync(cachePath);
         resolve('data:image/jpeg;base64,' + data.toString('base64'));
       } catch (e) {
         resolve(null);
       }
     });
   });
+});
+
+// --- Clear thumbnail cache ---
+ipcMain.handle('clear-thumb-cache', () => {
+  try {
+    const files = fs.readdirSync(THUMB_CACHE_DIR);
+    files.forEach(f => fs.unlinkSync(path.join(THUMB_CACHE_DIR, f)));
+    return files.length;
+  } catch (e) {
+    return 0;
+  }
 });
 
 // --- Rename to UUID ---

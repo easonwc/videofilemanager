@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   unwatchFolder: () => ipcRenderer.invoke('unwatch-folder'),
   getFavorites: () => ipcRenderer.invoke('get-favorites'),
   setFavorites: (favs) => ipcRenderer.invoke('set-favorites', favs),
+  clearThumbCache: () => ipcRenderer.invoke('clear-thumb-cache'),
   onFolderChanged: (cb) => ipcRenderer.on('folder-changed', cb),
   offFolderChanged: (cb) => ipcRenderer.removeListener('folder-changed', cb)
 });

@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and vers
 
 ---
 
+## [1.2.0] - 2026-04-09
+
+### Added
+- Disk-based thumbnail cache — thumbnails are saved to `userData/thumbnails/` so they only get extracted once per file; subsequent loads are instant
+- IntersectionObserver lazy loading — thumbnails only load when their card scrolls into view (with 200px pre-load margin), making initial grid render near-instant regardless of library size
+- Concurrency limiter — thumbnail extraction is capped at 5 simultaneous ffmpeg processes to keep the system responsive during large scans
+- Shimmer loading animation on grid cards while thumbnails are being extracted
+- Thumbnails are now scaled to 320px wide during extraction, reducing file size and memory usage
+- `clearThumbCache` API for clearing the disk cache if needed
+
+### Changed
+- Grid view now renders all cards immediately and loads thumbnails progressively as you scroll
+
+---
+
 ## [1.1.0] - 2026-04-09
 
 ### Changed
