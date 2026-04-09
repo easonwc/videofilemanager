@@ -2,6 +2,7 @@
   "name": "video-manager",
   "version": "1.0.0",
   "description": "Local video file manager",
+  "author": "William C Eason II <willeason2@gmail.com>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -26,7 +27,8 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "forceCodeSigning": false
     },
     "nsis": {
       "oneClick": false,
