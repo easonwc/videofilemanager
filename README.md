@@ -17,7 +17,8 @@ Video Manager lets you browse, organize, and play video files stored on your PC.
 - **Sort & Filter** — sort by name, size, duration, quality, or file type; filter by quality, extension, or favorites
 - **Search** — live search by filename
 - **Favorites** — star any video and filter to favorites only; favorites persist between sessions
-- **Video player** — built-in player with prev/next navigation and keyboard shortcuts (← → Escape)
+- **Video player** — built-in player with prev/next navigation, speed control, volume slider, fullscreen, and picture-in-picture
+- **Keyboard shortcuts** — ← → for prev/next, Space for play/pause, F for fullscreen, Escape to close
 - **Bulk rename** — rename selected files to UUID (keeps original extension)
 - **Bulk delete** — delete selected files with confirmation
 - **Duplicate detection** — finds duplicates by matching duration and file size (with 2% tolerance)
@@ -98,7 +99,9 @@ video-manager/
 |-----|--------|
 | `←` | Previous video |
 | `→` | Next video |
-| `Escape` | Close player |
+| `Space` | Play / Pause |
+| `F` | Toggle fullscreen |
+| `Escape` | Exit fullscreen or close player |
 
 ---
 
@@ -109,6 +112,16 @@ William C Eason II — [willeason2@gmail.com](mailto:willeason2@gmail.com)
 ---
 
 ## Changelog
+
+### [1.4.0] - 2026-04-09
+**Added**
+- Enhanced video player — speed control (0.25x–2x), volume slider, resolution display
+- Picture-in-Picture and fullscreen modes
+- `Space` to play/pause, `F` for fullscreen keyboard shortcuts
+- GPU hardware acceleration for improved 1080p/4K decoding
+- Native resolution rendering with `object-fit: contain`
+- Interactive duplicate reconciliation — pick a keeper, bulk delete the rest
+- Duplicate detection now uses 2% file size tolerance
 
 ### [1.3.0] - 2026-04-09
 **Changed**

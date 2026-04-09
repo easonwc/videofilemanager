@@ -427,17 +427,17 @@ button:disabled {
 #player-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.85);
+  background: rgba(0,0,0,0.9);
 }
 
 #player-container {
   position: relative;
   z-index: 1;
-  background: #141414;
+  background: #0a0a0a;
   border-radius: 10px;
   padding: 12px;
-  width: 90vw;
-  max-width: 1400px;
+  width: 92vw;
+  max-width: 1500px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -456,7 +456,19 @@ button:disabled {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80%;
+  max-width: 70%;
+}
+
+#player-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#player-pip,
+#player-fullscreen {
+  font-size: 14px;
+  padding: 4px 8px;
 }
 
 #player-close {
@@ -473,18 +485,47 @@ button:disabled {
   color: #fff;
 }
 
-#video-player {
+#player-video-wrap {
+  position: relative;
   width: 100%;
-  max-height: 75vh;
   background: #000;
   border-radius: 4px;
+  overflow: hidden;
+  /* Prevent subpixel scaling — render video at native quality */
+  image-rendering: auto;
+}
+
+#player-video-wrap:fullscreen {
+  border-radius: 0;
+}
+
+#video-player {
+  display: block;
+  width: 100%;
+  max-height: 78vh;
+  background: #000;
+  /* Ensure crisp rendering */
+  image-rendering: auto;
+  object-fit: contain;
+}
+
+#player-video-wrap:fullscreen #video-player {
+  max-height: 100vh;
+  height: 100vh;
+}
+
+#player-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 #player-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 #player-index {
@@ -492,6 +533,42 @@ button:disabled {
   color: #888;
   min-width: 80px;
   text-align: center;
+}
+
+#player-extras {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.player-control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #888;
+}
+
+.player-control-label select {
+  font-size: 12px;
+  padding: 3px 6px;
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  color: #f0f0f0;
+  border-radius: 4px;
+}
+
+#player-volume {
+  width: 80px;
+  height: 4px;
+  accent-color: #00c850;
+  cursor: pointer;
+}
+
+#player-resolution {
+  font-size: 11px;
+  color: #555;
+  font-weight: 600;
 }
 
 /* ── Duplicates Modal ── */
@@ -516,7 +593,7 @@ button:disabled {
   background: #141414;
   border-radius: 10px;
   padding: 20px;
-  width: 700px;
+  width: 800px;
   max-width: 90vw;
   max-height: 80vh;
   display: flex;
@@ -534,6 +611,39 @@ button:disabled {
 #dup-header h2 {
   font-size: 16px;
   font-weight: 600;
+}
+
+#dup-summary {
+  font-size: 12px;
+  color: #888;
+  display: block;
+  margin-top: 2px;
+}
+
+#dup-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#dup-delete-selected {
+  background: #e84040;
+  border-color: #e84040;
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+#dup-delete-selected:hover:not(:disabled) {
+  background: #c03030;
+  border-color: #c03030;
+  color: #fff;
+}
+
+#dup-instructions {
+  font-size: 12px;
+  color: #888;
+  padding: 0 0 4px 0;
 }
 
 #dup-content {
@@ -554,18 +664,92 @@ button:disabled {
   font-size: 12px;
   font-weight: 600;
   color: #00c850;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dup-group-meta {
+  font-weight: 400;
+  color: #888;
+  font-size: 11px;
 }
 
 .dup-item {
-  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid #2a2a2a;
   font-size: 12px;
+  transition: background 0.15s;
 }
 
 .dup-item:last-child { border-bottom: none; }
 
-.dup-path {
+.dup-item.dup-marked-keep {
+  background: #00c85010;
+}
+
+.dup-item.dup-marked-delete {
+  background: #e8404010;
+  opacity: 0.6;
+}
+
+.dup-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.dup-radio {
+  accent-color: #00c850;
+  cursor: pointer;
+}
+
+.dup-keep-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #00c850;
+  background: #00c85020;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.dup-delete-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #e84040;
+  background: #e8404020;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.dup-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dup-name {
+  color: #f0f0f0;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dup-item-meta {
   color: #888;
+  font-size: 11px;
+}
+
+.dup-item-path {
+  color: #555;
+  font-size: 10px;
   word-break: break-all;
 }
 

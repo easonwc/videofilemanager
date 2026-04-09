@@ -83,13 +83,40 @@
     <div id="player-container">
       <div id="player-header">
         <span id="player-title"></span>
-        <button id="player-close">✕</button>
+        <div id="player-header-actions">
+          <button id="player-pip" title="Picture-in-Picture">⧉</button>
+          <button id="player-fullscreen" title="Fullscreen">⛶</button>
+          <button id="player-close">✕</button>
+        </div>
       </div>
-      <video id="video-player" controls autoplay></video>
-      <div id="player-nav">
-        <button id="btn-prev">◀ Prev</button>
-        <span id="player-index"></span>
-        <button id="btn-next">Next ▶</button>
+      <div id="player-video-wrap">
+        <video id="video-player" controls autoplay></video>
+      </div>
+      <div id="player-controls">
+        <div id="player-nav">
+          <button id="btn-prev">◀ Prev</button>
+          <span id="player-index"></span>
+          <button id="btn-next">Next ▶</button>
+        </div>
+        <div id="player-extras">
+          <label class="player-control-label">
+            Speed
+            <select id="player-speed">
+              <option value="0.25">0.25x</option>
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
+          </label>
+          <label class="player-control-label">
+            Vol
+            <input type="range" id="player-volume" min="0" max="1" step="0.05" value="1" />
+          </label>
+          <span id="player-resolution"></span>
+        </div>
       </div>
     </div>
   </div>
@@ -99,9 +126,16 @@
     <div id="dup-backdrop"></div>
     <div id="dup-container">
       <div id="dup-header">
-        <h2>Duplicate Videos</h2>
-        <button id="dup-close">✕</button>
+        <div>
+          <h2>Duplicate Videos</h2>
+          <span id="dup-summary"></span>
+        </div>
+        <div id="dup-header-actions">
+          <button id="dup-delete-selected" disabled>🗑 Delete Unselected Duplicates</button>
+          <button id="dup-close">✕</button>
+        </div>
       </div>
+      <p id="dup-instructions" class="hidden">Select the file you want to keep in each group. The others will be marked for deletion.</p>
       <div id="dup-content"></div>
     </div>
   </div>

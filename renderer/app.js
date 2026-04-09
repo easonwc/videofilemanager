@@ -430,34 +430,154 @@ async function saveFavorites() {
 }
 
 // --- Duplicates ---
+const dupSummary = document.getElementById('dup-summary');
+const dupInstructions = document.getElementById('dup-instructions');
+const dupDeleteBtn = document.getElementById('dup-delete-selected');
+let duplicateGroups = [];
+
 btnDuplicates.addEventListener('click', async () => {
-  const groups = await window.api.findDuplicates(allVideos);
-  dupContent.innerHTML = '';
-  if (groups.length === 0) {
-    dupContent.innerHTML = '<p class="empty-msg">No duplicates found.</p>';
-  } else {
-    groups.forEach((group, gi) => {
-      const groupEl = document.createElement('div');
-      groupEl.className = 'dup-group';
-      groupEl.innerHTML = `<div class="dup-group-title">Group ${gi + 1} — ${group.length} files (${formatSize(group[0].size)}, ${formatDuration(group[0].duration)})</div>`;
-      group.forEach(v => {
-        const item = document.createElement('div');
-        item.className = 'dup-item';
-        item.innerHTML = `<span class="dup-path" title="${v.path}">${v.path}</span>`;
-        groupEl.appendChild(item);
-      });
-      dupContent.appendChild(groupEl);
-    });
-  }
+  duplicateGroups = await window.api.findDuplicates(allVideos);
+  renderDuplicates();
   duplicatesModal.classList.remove('hidden');
+});
+
+function renderDuplicates() {
+  dupContent.innerHTML = '';
+  dupDeleteBtn.disabled = true;
+
+  if (duplicateGroups.length === 0) {
+    dupContent.innerHTML = '<p class="empty-msg">No duplicates found.</p>';
+    dupSummary.textContent = '';
+    dupInstructions.classList.add('hidden');
+    return;
+  }
+
+  const totalFiles = duplicateGroups.reduce((sum, g) => sum + g.length, 0);
+  dupSummary.textContent = `${duplicateGroups.length} group(s), ${totalFiles} files`;
+  dupInstructions.classList.remove('hidden');
+
+  duplicateGroups.forEach((group, gi) => {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'dup-group';
+    groupEl.dataset.group = gi;
+
+    groupEl.innerHTML = `<div class="dup-group-title">
+      Group ${gi + 1} — ${group.length} files
+      <span class="dup-group-meta">${formatDuration(group[0].duration)} · ~${formatSize(group[0].size)}</span>
+    </div>`;
+
+    group.forEach((v, vi) => {
+      const item = document.createElement('div');
+      item.className = 'dup-item';
+      item.dataset.group = gi;
+      item.dataset.index = vi;
+      item.dataset.path = v.path;
+
+      item.innerHTML = `
+        <label class="dup-radio-label">
+          <input type="radio" name="dup-group-${gi}" value="${vi}" class="dup-radio" />
+          <span class="dup-keep-badge hidden">KEEP</span>
+          <span class="dup-delete-badge hidden">DELETE</span>
+        </label>
+        <div class="dup-item-info">
+          <span class="dup-name" title="${v.path}">${v.name}</span>
+          <span class="dup-item-meta">${v.quality} · ${formatSize(v.size)} · ${v.ext}</span>
+          <span class="dup-item-path">${v.path}</span>
+        </div>
+      `;
+
+      groupEl.appendChild(item);
+    });
+
+    dupContent.appendChild(groupEl);
+  });
+
+  // Radio button change handlers
+  dupContent.querySelectorAll('.dup-radio').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const groupIdx = radio.closest('.dup-item').dataset.group;
+      const keepIdx = radio.value;
+
+      // Update badges in this group
+      const groupItems = dupContent.querySelectorAll(`.dup-item[data-group="${groupIdx}"]`);
+      groupItems.forEach(item => {
+        const keepBadge = item.querySelector('.dup-keep-badge');
+        const delBadge = item.querySelector('.dup-delete-badge');
+        if (item.dataset.index === keepIdx) {
+          keepBadge.classList.remove('hidden');
+          delBadge.classList.add('hidden');
+          item.classList.remove('dup-marked-delete');
+          item.classList.add('dup-marked-keep');
+        } else {
+          keepBadge.classList.add('hidden');
+          delBadge.classList.remove('hidden');
+          item.classList.add('dup-marked-delete');
+          item.classList.remove('dup-marked-keep');
+        }
+      });
+
+      updateDupDeleteButton();
+    });
+  });
+}
+
+function updateDupDeleteButton() {
+  // Enable delete button if at least one group has a selection
+  const anySelected = dupContent.querySelector('.dup-radio:checked');
+  const filesToDelete = getFilesToDelete();
+  dupDeleteBtn.disabled = filesToDelete.length === 0;
+  if (filesToDelete.length > 0) {
+    dupDeleteBtn.textContent = `🗑 Delete ${filesToDelete.length} Duplicate(s)`;
+  } else {
+    dupDeleteBtn.textContent = '🗑 Delete Unselected Duplicates';
+  }
+}
+
+function getFilesToDelete() {
+  const toDelete = [];
+  duplicateGroups.forEach((group, gi) => {
+    const selected = dupContent.querySelector(`input[name="dup-group-${gi}"]:checked`);
+    if (!selected) return; // no keeper chosen for this group yet
+    const keepIdx = parseInt(selected.value);
+    group.forEach((v, vi) => {
+      if (vi !== keepIdx) toDelete.push(v.path);
+    });
+  });
+  return toDelete;
+}
+
+dupDeleteBtn.addEventListener('click', async () => {
+  const toDelete = getFilesToDelete();
+  if (toDelete.length === 0) return;
+
+  const confirm = window.confirm(`Delete ${toDelete.length} duplicate file(s)? This cannot be undone.\n\nThe files you selected as "KEEP" will remain.`);
+  if (!confirm) return;
+
+  showLoading('Deleting duplicates...');
+  duplicatesModal.classList.add('hidden');
+  const results = await window.api.deleteFiles(toDelete);
+  await loadVideos();
+  hideLoading();
+
+  const failed = results.filter(r => !r.success).length;
+  setStatus(`Deleted ${results.length - failed} duplicate(s).${failed ? ` ${failed} failed.` : ''}`);
 });
 
 dupClose.addEventListener('click', () => duplicatesModal.classList.add('hidden'));
 dupBackdrop.addEventListener('click', () => duplicatesModal.classList.add('hidden'));
 
 // --- Video Player ---
+const playerPip = document.getElementById('player-pip');
+const playerFullscreen = document.getElementById('player-fullscreen');
+const playerSpeed = document.getElementById('player-speed');
+const playerVolume = document.getElementById('player-volume');
+const playerResolution = document.getElementById('player-resolution');
+
 function openPlayer(index) {
   currentPlayerIndex = index;
+  playerSpeed.value = '1';
+  videoPlayer.playbackRate = 1;
+  videoPlayer.volume = parseFloat(playerVolume.value);
   playVideo(index);
   playerModal.classList.remove('hidden');
 }
@@ -470,6 +590,8 @@ function playVideo(index) {
   playerIndex.textContent = `${index + 1} / ${filteredVideos.length}`;
   btnPrev.disabled = index === 0;
   btnNext.disabled = index === filteredVideos.length - 1;
+  playerResolution.textContent = v.width && v.height ? `${v.width}×${v.height} · ${v.quality}` : '';
+  videoPlayer.playbackRate = parseFloat(playerSpeed.value);
   videoPlayer.play();
 }
 
@@ -477,6 +599,10 @@ function closePlayer() {
   videoPlayer.pause();
   videoPlayer.src = '';
   playerModal.classList.add('hidden');
+  // Exit PiP if active
+  if (document.pictureInPictureElement) {
+    document.exitPictureInPicture().catch(() => {});
+  }
 }
 
 playerClose.addEventListener('click', closePlayer);
@@ -496,11 +622,56 @@ btnNext.addEventListener('click', () => {
   }
 });
 
+// Speed control
+playerSpeed.addEventListener('change', () => {
+  videoPlayer.playbackRate = parseFloat(playerSpeed.value);
+});
+
+// Volume control
+playerVolume.addEventListener('input', () => {
+  videoPlayer.volume = parseFloat(playerVolume.value);
+});
+
+// Picture-in-Picture
+playerPip.addEventListener('click', async () => {
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+    } else {
+      await videoPlayer.requestPictureInPicture();
+    }
+  } catch (e) {}
+});
+
+// Fullscreen toggle
+playerFullscreen.addEventListener('click', () => {
+  const wrap = document.getElementById('player-video-wrap');
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    wrap.requestFullscreen().catch(() => {
+      // Fallback: try the video element directly
+      videoPlayer.requestFullscreen().catch(() => {});
+    });
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (playerModal.classList.contains('hidden')) return;
-  if (e.key === 'Escape') closePlayer();
+  if (e.key === 'Escape') {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      closePlayer();
+    }
+  }
   if (e.key === 'ArrowLeft') btnPrev.click();
   if (e.key === 'ArrowRight') btnNext.click();
+  if (e.key === 'f' || e.key === 'F') playerFullscreen.click();
+  if (e.key === ' ') {
+    e.preventDefault();
+    videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
+  }
 });
 
 // --- Helpers ---

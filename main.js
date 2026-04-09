@@ -6,6 +6,13 @@ const ffprobePath = require('ffprobe-static').path;
 const ffmpegPath = require('ffmpeg-static');
 const { v4: uuidv4 } = require('uuid');
 
+// --- Hardware acceleration flags for better video playback ---
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-hardware-overlays', 'single-fullscreen,single-on-top,underlay');
+app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
+
 const FAVORITES_FILE = path.join(app.getPath('userData'), 'favorites.json');
 const THUMB_CACHE_DIR = path.join(app.getPath('userData'), 'thumbnails');
 

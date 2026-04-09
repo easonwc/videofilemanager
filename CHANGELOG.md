@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and vers
 
 ---
 
+## [1.4.0] - 2026-04-09
+
+### Added
+- Enhanced video player with speed control (0.25x–2x), volume slider, resolution display
+- Picture-in-Picture mode — pop the video into a floating window
+- Fullscreen mode with dedicated button and `F` keyboard shortcut
+- `Space` key to play/pause in the player
+- GPU hardware acceleration flags for improved video decoding at 1080p/4K
+- Video renders at native resolution with `object-fit: contain` for maximum sharpness
+- Interactive duplicate reconciliation — select a "keeper" per group, bulk delete the rest
+- KEEP/DELETE badges with visual feedback in duplicate groups
+- Duplicate detection now uses 2% file size tolerance to catch near-identical files
+
+### Changed
+- Player container widened to 92vw / 1500px max with 78vh video height
+- Player backdrop darkened to 90% opacity for better contrast
+- Duplicates modal widened to 800px with richer file details (name, quality, size, path)
+
+---
+
 ## [1.3.0] - 2026-04-09
 
 ### Changed
