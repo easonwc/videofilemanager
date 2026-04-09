@@ -1,0 +1,43 @@
+# Changelog
+
+All notable changes to Video Manager will be documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and versioning follows [Semantic Versioning](https://semver.org/).
+
+---
+
+## [1.1.0] - 2026-04-09
+
+### Changed
+- Redesigned app icon with a professional green and black color scheme
+- Icon now features a film strip with sprocket holes and a green play button circle
+- Added `author` field to package.json for proper installer metadata
+- Enabled Windows Developer Mode support for builds (resolves symlink error during packaging)
+- Updated `make-icon.js` to generate a proper ICO binary without external dependencies
+
+### Fixed
+- Build no longer fails with "Cannot create symbolic link" error when Developer Mode is enabled
+- Icon no longer rejected by electron-builder due to invalid format
+
+---
+
+## [1.0.0] - 2026-04-09
+
+### Added
+- Initial release
+- Recursive folder scanning for video files (.mp4, .mkv, .avi, .mov, .wmv, .flv, .webm, .m4v, .mpeg, .mpg)
+- Video metadata extraction via ffprobe — resolution, quality (4K/1080p/720p/480p/SD), duration, file size
+- List view with sortable table (name, size, duration, quality, type)
+- Grid view with 6 columns and thumbnail previews extracted at the 7-second mark
+- Sort by name, size, duration, quality, or file type
+- Filter by quality, file extension, or favorites
+- Live search by filename
+- Favorites system with persistent storage
+- Built-in video player modal (90vw, large format)
+- Previous/next navigation in player
+- Keyboard shortcuts in player (← → Escape)
+- Bulk rename selected files to UUID
+- Bulk delete selected files with confirmation
+- Duplicate detection by file size and duration
+- Auto-refresh when files are added or removed from the watched folder
+- Windows NSIS installer via electron-builder
+- Git repository with GitHub remote
