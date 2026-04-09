@@ -233,13 +233,38 @@ ipcMain.handle('delete-files', async (_, filePaths) => {
 
 // --- Find duplicates ---
 ipcMain.handle('find-duplicates', async (_, videos) => {
-  const groups = {};
+  // Group by duration (rounded to nearest second), then check size within a tolerance
+  const SIZE_TOLERANCE = 0.02; // 2% size difference allowed
+  const durationGroups = {};
   for (const v of videos) {
-    const key = `${v.size}_${Math.round(v.duration)}`;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(v);
+    const durKey = Math.round(v.duration);
+    if (!durationGroups[durKey]) durationGroups[durKey] = [];
+    durationGroups[durKey].push(v);
   }
-  return Object.values(groups).filter(g => g.length > 1);
+
+  const duplicateGroups = [];
+  for (const vids of Object.values(durationGroups)) {
+    if (vids.length < 2) continue;
+    // Within same-duration group, cluster by similar size
+    const used = new Set();
+    for (let i = 0; i < vids.length; i++) {
+      if (used.has(i)) continue;
+      const cluster = [vids[i]];
+      for (let j = i + 1; j < vids.length; j++) {
+        if (used.has(j)) continue;
+        const sizeDiff = Math.abs(vids[i].size - vids[j].size) / Math.max(vids[i].size, 1);
+        if (sizeDiff <= SIZE_TOLERANCE) {
+          cluster.push(vids[j]);
+          used.add(j);
+        }
+      }
+      if (cluster.length > 1) {
+        used.add(i);
+        duplicateGroups.push(cluster);
+      }
+    }
+  }
+  return duplicateGroups;
 });
 
 // --- fs.watch for auto-refresh ---

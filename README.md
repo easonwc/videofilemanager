@@ -20,8 +20,10 @@ Video Manager lets you browse, organize, and play video files stored on your PC.
 - **Video player** — built-in player with prev/next navigation and keyboard shortcuts (← → Escape)
 - **Bulk rename** — rename selected files to UUID (keeps original extension)
 - **Bulk delete** — delete selected files with confirmation
-- **Duplicate detection** — finds duplicates by matching file size and duration
+- **Duplicate detection** — finds duplicates by matching duration and file size (with 2% tolerance)
 - **Auto-refresh** — automatically updates the list when files are added or removed from the watched folder
+- **Thumbnail caching** — extracted thumbnails are cached to disk for instant loading on subsequent visits
+- **Lazy loading** — grid thumbnails load on-demand as you scroll, keeping the UI fast with large libraries
 
 ---
 
@@ -64,9 +66,9 @@ To package the app as a Windows `.exe` installer, run from an **Administrator te
 npm run build
 ```
 
-The installer will be output to `dist/Video Manager Setup 1.0.0.exe`.
+The installer will be output to `dist/Video Manager Setup <version>.exe`.
 
-> **Note:** The build requires Administrator privileges on Windows due to electron-builder's code signing tools. If the build fails, try clearing the cache at `C:\Users\<you>\AppData\Local\electron-builder\Cache\winCodeSign` and re-running from an admin terminal.
+> **Note:** The build requires Windows Developer Mode to be enabled (Settings → System → For Developers) due to symlink creation during packaging. Alternatively, run from an Administrator terminal.
 
 ---
 
@@ -103,3 +105,49 @@ video-manager/
 ## Author
 
 William C Eason II — [willeason2@gmail.com](mailto:willeason2@gmail.com)
+
+---
+
+## Changelog
+
+### [1.3.0] - 2026-04-09
+**Changed**
+- Full UI reskin to match personal design system (green & black theme)
+- Replaced navy blue palette with design system colors (`#0a0a0a` bg, `#00c850` primary, `#141414` surfaces)
+- Updated font to Arial as default
+- Buttons, modals, tables, spinner, and scrollbars updated to match design system
+- Shimmer animation updated to match dark palette
+
+### [1.2.0] - 2026-04-09
+**Added**
+- Disk-based thumbnail cache — thumbnails saved to `userData/thumbnails/` for instant reloads
+- IntersectionObserver lazy loading — thumbnails load as cards scroll into view
+- Concurrency limiter — max 5 simultaneous ffmpeg thumbnail extractions
+- Shimmer loading animation on grid cards
+- Thumbnails scaled to 320px wide during extraction for smaller cache size
+
+### [1.1.0] - 2026-04-09
+**Changed**
+- Redesigned app icon — green & black film strip with play button
+- Added `author` field to package.json
+- `make-icon.js` now generates a proper ICO binary without external dependencies
+
+**Fixed**
+- Build no longer fails with symlink error when Developer Mode is enabled
+- Icon no longer rejected by electron-builder
+
+### [1.0.0] - 2026-04-09
+**Added**
+- Initial release
+- Recursive folder scanning for video files
+- Video metadata extraction via ffprobe (resolution, quality, duration, size)
+- List view and 6-column grid view with thumbnail previews (7-second mark)
+- Sort by name, size, duration, quality, or file type
+- Filter by quality, extension, or favorites
+- Live search by filename
+- Favorites system with persistent storage
+- Built-in video player with prev/next navigation and keyboard shortcuts
+- Bulk rename to UUID and bulk delete with confirmation
+- Duplicate detection by file size and duration
+- Auto-refresh via fs.watch
+- Windows NSIS installer via electron-builder
