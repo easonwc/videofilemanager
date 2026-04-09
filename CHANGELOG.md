@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and vers
 
 ---
 
+## [1.3.0] - 2026-04-09
+
+### Changed
+- Full UI reskin to match personal design system (green & black theme)
+- Replaced navy blue palette with design system colors (`#0a0a0a` bg, `#00c850` primary, `#141414` surfaces)
+- Updated font to Arial as default
+- Buttons now follow design system: dark bg, green hover, red for destructive actions
+- Table rows use green-tinted selection highlight
+- Modals updated with consistent border and radius
+- Spinner updated to green accent
+- Custom scrollbar styling added
+- Shimmer animation updated to match dark palette
+
+---
+
 ## [1.2.0] - 2026-04-09
 
 ### Added
