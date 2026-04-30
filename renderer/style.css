@@ -437,8 +437,8 @@ button:disabled {
   background: #0a0a0a;
   border-radius: 10px;
   padding: 12px;
-  width: 92vw;
-  max-width: 1500px;
+  width: 95vw;
+  max-width: 1600px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -492,8 +492,6 @@ button:disabled {
   background: #000;
   border-radius: 4px;
   overflow: hidden;
-  /* Prevent subpixel scaling — render video at native quality */
-  image-rendering: auto;
 }
 
 #player-video-wrap:fullscreen {
@@ -503,11 +501,15 @@ button:disabled {
 #video-player {
   display: block;
   width: 100%;
-  max-height: 78vh;
+  max-height: 85vh;
   background: #000;
-  /* Ensure crisp rendering */
-  image-rendering: auto;
   object-fit: contain;
+  /* Prevent blurry scaling — use high-quality interpolation */
+  image-rendering: auto;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  /* Force GPU layer for crisp rendering */
+  will-change: transform;
 }
 
 #player-video-wrap:fullscreen #video-player {
