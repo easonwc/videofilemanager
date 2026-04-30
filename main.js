@@ -16,6 +16,29 @@ app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEnc
 const FAVORITES_FILE = path.join(app.getPath('userData'), 'favorites.json');
 const LAST_FOLDER_FILE = path.join(app.getPath('userData'), 'last-folder.json');
 const THUMB_CACHE_DIR = path.join(app.getPath('userData'), 'thumbnails');
+const META_CACHE_FILE = path.join(app.getPath('userData'), 'metadata-cache.json');
+
+// --- Metadata cache ---
+let metaCache = {}; // key -> { width, height, quality, duration }
+
+function loadMetaCache() {
+  try {
+    if (fs.existsSync(META_CACHE_FILE)) {
+      metaCache = JSON.parse(fs.readFileSync(META_CACHE_FILE, 'utf8'));
+    }
+  } catch (e) { metaCache = {}; }
+}
+
+function saveMetaCache() {
+  try {
+    fs.writeFileSync(META_CACHE_FILE, JSON.stringify(metaCache), 'utf8');
+  } catch (e) {}
+}
+
+// Cache key: path + size + modified time — if any change, re-extract
+function metaCacheKey(filePath, size, mtimeMs) {
+  return `${filePath}|${size}|${Math.round(mtimeMs)}`;
+}
 
 let mainWindow;
 let folderWatcher = null;
@@ -23,6 +46,7 @@ let folderWatcher = null;
 // Ensure thumbnail cache directory exists
 app.whenReady().then(() => {
   if (!fs.existsSync(THUMB_CACHE_DIR)) fs.mkdirSync(THUMB_CACHE_DIR, { recursive: true });
+  loadMetaCache();
 });
 
 function createWindow() {
@@ -145,7 +169,7 @@ function getVideoMetadata(filePath) {
   });
 }
 
-// Phase 1: quick file-system scan — returns immediately with basic info
+// Phase 1: quick file-system scan — returns immediately with basic info + cached metadata
 ipcMain.handle('scan-folder', async (_, folderPath) => {
   const files = scanFolder(folderPath);
   const results = [];
@@ -153,16 +177,21 @@ ipcMain.handle('scan-folder', async (_, folderPath) => {
   for (const filePath of files) {
     try {
       const stat = fs.statSync(filePath);
+      const cacheKey = metaCacheKey(filePath, stat.size, stat.mtimeMs);
+      const cached = metaCache[cacheKey];
+
       results.push({
         path: filePath,
         name: path.basename(filePath),
         ext: path.extname(filePath).toLowerCase(),
         size: stat.size,
         modified: stat.mtimeMs,
-        width: 0,
-        height: 0,
-        quality: 'Loading...',
-        duration: 0
+        width: cached ? cached.width : 0,
+        height: cached ? cached.height : 0,
+        quality: cached ? cached.quality : 'Loading...',
+        duration: cached ? cached.duration : 0,
+        _cacheKey: cacheKey,
+        _cached: !!cached
       });
     } catch (e) {}
   }
@@ -173,37 +202,62 @@ ipcMain.handle('scan-folder', async (_, folderPath) => {
 // Phase 2: progressive metadata extraction — sends updates as each file completes
 const META_CONCURRENCY = 6;
 
-ipcMain.handle('extract-metadata', async (_, filePaths) => {
-  let completed = 0;
-  const total = filePaths.length;
+ipcMain.handle('extract-metadata', async (_, fileInfos) => {
+  // fileInfos is an array of { path, _cacheKey, _cached }
+  // Skip files that already have cached metadata
+  const toExtract = fileInfos.filter(f => !f._cached);
+  const total = toExtract.length;
 
-  async function processFile(filePath) {
-    const meta = await getVideoMetadata(filePath);
+  if (total === 0) {
+    // Everything was cached — send 100% immediately
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('metadata-update', { path: null, progress: 100, allCached: true });
+    }
+    return true;
+  }
+
+  let completed = 0;
+
+  async function processFile(fileInfo) {
+    const meta = await getVideoMetadata(fileInfo.path);
     completed++;
+
+    const result = {
+      width: meta ? meta.width : 0,
+      height: meta ? meta.height : 0,
+      quality: meta ? meta.quality : 'Unknown',
+      duration: meta ? meta.duration : 0
+    };
+
+    // Save to cache
+    if (fileInfo._cacheKey) {
+      metaCache[fileInfo._cacheKey] = result;
+    }
+
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('metadata-update', {
-        path: filePath,
-        width: meta ? meta.width : 0,
-        height: meta ? meta.height : 0,
-        quality: meta ? meta.quality : 'Unknown',
-        duration: meta ? meta.duration : 0,
+        path: fileInfo.path,
+        ...result,
         progress: Math.round((completed / total) * 100)
       });
     }
   }
 
   // Process in batches for concurrency
-  const queue = [...filePaths];
+  const queue = [...toExtract];
   const workers = [];
   for (let i = 0; i < META_CONCURRENCY; i++) {
     workers.push((async () => {
       while (queue.length > 0) {
-        const fp = queue.shift();
-        if (fp) await processFile(fp);
+        const f = queue.shift();
+        if (f) await processFile(f);
       }
     })());
   }
   await Promise.all(workers);
+
+  // Persist cache to disk after extraction completes
+  saveMetaCache();
   return true;
 });
 

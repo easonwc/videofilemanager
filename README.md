@@ -115,6 +115,11 @@ William C Eason II — [willeason2@gmail.com](mailto:willeason2@gmail.com)
 
 ## Changelog
 
+### [1.6.0] - 2026-04-30
+**Added**
+- Persistent metadata cache — only new or modified files trigger ffprobe; cached files load instantly
+- Near-instant startup when reopening a previously scanned folder
+
 ### [1.5.0] - 2026-04-09
 **Added**
 - Auto-loads last selected folder on startup

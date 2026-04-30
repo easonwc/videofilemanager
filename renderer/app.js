@@ -142,31 +142,43 @@ async function loadVideos() {
     setStatus('Scanning files...', false);
     allVideos = await window.api.scanFolder(currentFolder);
     applyFiltersAndRender();
-    setStatus(`${allVideos.length} files found. Extracting metadata...`, false);
 
-    // Phase 2: progressive metadata
+    // Phase 2: progressive metadata — only for uncached files
     if (allVideos.length > 0) {
-      window.api.onMetadataUpdate((data) => {
-        const video = allVideos.find(v => v.path === data.path);
-        if (video) {
-          video.width = data.width;
-          video.height = data.height;
-          video.quality = data.quality;
-          video.duration = data.duration;
-        }
+      const uncached = allVideos.filter(v => !v._cached);
 
-        if (data.progress % 5 === 0 || data.progress === 100) {
-          applyFiltersAndRender();
-        }
+      if (uncached.length === 0) {
+        setStatus(`${allVideos.length} videos loaded (all cached).`);
+      } else {
+        setStatus(`Extracting metadata for ${uncached.length} new file(s)...`, false);
 
-        if (data.progress < 100) {
-          setStatus(`Extracting metadata... ${data.progress}%`, false);
-        } else {
-          setStatus(`${allVideos.length} videos loaded.`);
-        }
-      });
+        window.api.onMetadataUpdate((data) => {
+          if (data.allCached) {
+            setStatus(`${allVideos.length} videos loaded (all cached).`);
+            return;
+          }
 
-      window.api.extractMetadata(allVideos.map(v => v.path));
+          const video = allVideos.find(v => v.path === data.path);
+          if (video) {
+            video.width = data.width;
+            video.height = data.height;
+            video.quality = data.quality;
+            video.duration = data.duration;
+          }
+
+          if (data.progress % 5 === 0 || data.progress === 100) {
+            applyFiltersAndRender();
+          }
+
+          if (data.progress < 100) {
+            setStatus(`Extracting metadata... ${data.progress}%`, false);
+          } else {
+            setStatus(`${allVideos.length} videos loaded.`);
+          }
+        });
+
+        window.api.extractMetadata(allVideos.map(v => ({ path: v.path, _cacheKey: v._cacheKey, _cached: v._cached })));
+      }
     } else {
       setStatus('No videos found.');
     }

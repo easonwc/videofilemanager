@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and vers
 
 ---
 
+## [1.6.0] - 2026-04-30
+
+### Added
+- Persistent metadata cache — video metadata (quality, resolution, duration) is saved to disk and reused on subsequent loads, keyed by file path + size + modified timestamp
+- Only new or modified files trigger ffprobe extraction; cached files load instantly
+- Status bar shows "all cached" when no extraction is needed
+
+### Changed
+- App startup with a previously scanned folder is now near-instant
+- Metadata extraction only runs for uncached files, dramatically reducing reload time for large libraries
+
+---
+
 ## [1.5.0] - 2026-04-09
 
 ### Added
