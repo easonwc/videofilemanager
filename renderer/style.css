@@ -238,6 +238,7 @@ button:disabled {
 .badge-480p   { background: #d97706; color: #fff; }
 .badge-SD     { background: #374151; color: #fff; }
 .badge-Unknown{ background: #374151; color: #888; }
+.badge-Loading\.\.\.{ background: #2a2a2a; color: #555; }
 
 /* ── Fav & play buttons in table ── */
 .fav-btn {
@@ -418,7 +419,7 @@ button:disabled {
 #player-modal {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,7 +594,7 @@ button:disabled {
   background: #141414;
   border-radius: 10px;
   padding: 20px;
-  width: 800px;
+  width: 900px;
   max-width: 90vw;
   max-height: 80vh;
   display: flex;
@@ -687,6 +688,44 @@ button:disabled {
 
 .dup-item:last-child { border-bottom: none; }
 
+.dup-thumb-wrap {
+  flex-shrink: 0;
+  width: 120px;
+  height: 68px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1c1c1c;
+  position: relative;
+}
+
+.dup-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.dup-play-btn {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.4);
+  border: none;
+  color: rgba(255,255,255,0.9);
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.dup-thumb-wrap:hover .dup-play-btn {
+  opacity: 1;
+}
+
 .dup-item.dup-marked-keep {
   background: #00c85010;
 }
@@ -751,6 +790,30 @@ button:disabled {
   color: #555;
   font-size: 10px;
   word-break: break-all;
+}
+
+.dup-similarity {
+  color: #00c850;
+  font-weight: 600;
+}
+
+.dup-dismiss-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  background: none;
+  border: 1px solid #2a2a2a;
+  color: #555;
+  font-size: 12px;
+  padding: 2px 7px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.dup-dismiss-btn:hover {
+  color: #e84040;
+  border-color: #e84040;
+  background: #e8404015;
 }
 
 /* ── Scrollbar styling ── */

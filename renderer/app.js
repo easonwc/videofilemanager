@@ -106,6 +106,15 @@ const dupContent = document.getElementById('dup-content');
 async function init() {
   const favs = await window.api.getFavorites();
   favorites = new Set(favs);
+
+  // Auto-load last folder
+  const lastFolder = await window.api.getLastFolder();
+  if (lastFolder) {
+    currentFolder = lastFolder;
+    folderPathEl.textContent = lastFolder;
+    await loadVideos();
+    await window.api.watchFolder(lastFolder);
+  }
 }
 init();
 
@@ -115,24 +124,55 @@ btnSelectFolder.addEventListener('click', async () => {
   if (!folder) return;
   currentFolder = folder;
   folderPathEl.textContent = folder;
+  await window.api.setLastFolder(folder);
   await window.api.unwatchFolder();
   await loadVideos();
   await window.api.watchFolder(folder);
 });
 
 async function loadVideos() {
-  showLoading('Scanning videos...');
   selectedPaths.clear();
   thumbnailCache = {};
-  thumbQueue.length = 0; // clear pending queue
+  thumbQueue.length = 0;
   thumbActiveCount = 0;
+  window.api.offMetadataUpdate();
+
   try {
+    // Phase 1: instant file list (no loading overlay — it's fast)
+    setStatus('Scanning files...', false);
     allVideos = await window.api.scanFolder(currentFolder);
     applyFiltersAndRender();
+    setStatus(`${allVideos.length} files found. Extracting metadata...`, false);
+
+    // Phase 2: progressive metadata
+    if (allVideos.length > 0) {
+      window.api.onMetadataUpdate((data) => {
+        const video = allVideos.find(v => v.path === data.path);
+        if (video) {
+          video.width = data.width;
+          video.height = data.height;
+          video.quality = data.quality;
+          video.duration = data.duration;
+        }
+
+        if (data.progress % 5 === 0 || data.progress === 100) {
+          applyFiltersAndRender();
+        }
+
+        if (data.progress < 100) {
+          setStatus(`Extracting metadata... ${data.progress}%`, false);
+        } else {
+          setStatus(`${allVideos.length} videos loaded.`);
+        }
+      });
+
+      window.api.extractMetadata(allVideos.map(v => v.path));
+    } else {
+      setStatus('No videos found.');
+    }
   } catch (e) {
     setStatus('Error scanning folder: ' + e.message);
   }
-  hideLoading();
 }
 
 // Auto-refresh
@@ -436,7 +476,22 @@ const dupDeleteBtn = document.getElementById('dup-delete-selected');
 let duplicateGroups = [];
 
 btnDuplicates.addEventListener('click', async () => {
-  duplicateGroups = await window.api.findDuplicates(allVideos);
+  // Check if metadata is loaded
+  const noMeta = allVideos.filter(v => !v.duration);
+  if (noMeta.length > 0) {
+    const proceed = window.confirm(`${noMeta.length} video(s) still loading metadata. Duplicates found may be incomplete.\n\nContinue anyway?`);
+    if (!proceed) return;
+  }
+
+  showLoading('Scanning for duplicates...');
+  window.api.onDupProgress((msg) => {
+    if (msg) loadingText.textContent = msg;
+  });
+
+  duplicateGroups = await window.api.findDuplicates(allVideos.filter(v => v.duration > 0));
+
+  window.api.offDupProgress();
+  hideLoading();
   renderDuplicates();
   duplicatesModal.classList.remove('hidden');
 });
@@ -479,14 +534,32 @@ function renderDuplicates() {
           <span class="dup-keep-badge hidden">KEEP</span>
           <span class="dup-delete-badge hidden">DELETE</span>
         </label>
+        <div class="dup-thumb-wrap">
+          <img class="dup-thumb" data-path="${v.path}" alt="" />
+          <button class="dup-play-btn" data-path="${v.path}" title="Play">▶</button>
+        </div>
         <div class="dup-item-info">
           <span class="dup-name" title="${v.path}">${v.name}</span>
-          <span class="dup-item-meta">${v.quality} · ${formatSize(v.size)} · ${v.ext}</span>
+          <span class="dup-item-meta">${v.quality} · ${formatSize(v.size)} · ${formatDuration(v.duration)} · ${v.ext}${v.similarity != null ? ` · <span class="dup-similarity">${v.similarity}% match</span>` : ''}</span>
           <span class="dup-item-path">${v.path}</span>
         </div>
+        <button class="dup-dismiss-btn" data-group="${gi}" data-index="${vi}" title="Not a duplicate — remove from group">✕</button>
       `;
 
       groupEl.appendChild(item);
+
+      // Load thumbnail
+      const thumbImg = item.querySelector('.dup-thumb');
+      if (thumbnailCache[v.path]) {
+        thumbImg.src = thumbnailCache[v.path];
+      } else {
+        window.api.getThumbnail(v.path).then(data => {
+          if (data) {
+            thumbnailCache[v.path] = data;
+            thumbImg.src = data;
+          }
+        });
+      }
     });
 
     dupContent.appendChild(groupEl);
@@ -517,6 +590,42 @@ function renderDuplicates() {
       });
 
       updateDupDeleteButton();
+    });
+  });
+
+  // Play button handlers — play video without closing duplicates modal
+  dupContent.querySelectorAll('.dup-play-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const filePath = btn.dataset.path;
+      // Open player on top of the duplicates modal
+      videoPlayer.src = filePath;
+      const v = allVideos.find(v => v.path === filePath);
+      playerTitle.textContent = v ? v.name : filePath;
+      playerIndex.textContent = 'Duplicate preview';
+      btnPrev.disabled = true;
+      btnNext.disabled = true;
+      playerResolution.textContent = v && v.width ? `${v.width}×${v.height} · ${v.quality}` : '';
+      playerModal.classList.remove('hidden');
+      videoPlayer.play();
+    });
+  });
+
+  // Dismiss button handlers — remove false positive from duplicate group
+  dupContent.querySelectorAll('.dup-dismiss-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const gi = parseInt(btn.dataset.group);
+      const vi = parseInt(btn.dataset.index);
+
+      if (duplicateGroups[gi]) {
+        duplicateGroups[gi].splice(vi, 1);
+        // Remove the whole group if less than 2 remain
+        if (duplicateGroups[gi].length < 2) {
+          duplicateGroups.splice(gi, 1);
+        }
+      }
+      renderDuplicates();
     });
   });
 }
@@ -603,6 +712,7 @@ function closePlayer() {
   if (document.pictureInPictureElement) {
     document.exitPictureInPicture().catch(() => {});
   }
+  // Don't close duplicates modal — player may have been opened from there
 }
 
 playerClose.addEventListener('click', closePlayer);
@@ -702,7 +812,11 @@ function hideLoading() {
   loadingEl.classList.add('hidden');
 }
 
-function setStatus(msg) {
+function setStatus(msg, autoClear = true) {
   statusMsg.textContent = msg;
-  setTimeout(() => { statusMsg.textContent = ''; }, 4000);
+  if (autoClear) {
+    setTimeout(() => {
+      if (statusMsg.textContent === msg) statusMsg.textContent = '';
+    }, 4000);
+  }
 }

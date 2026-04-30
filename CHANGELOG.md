@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and vers
 
 ---
 
+## [1.5.0] - 2026-04-09
+
+### Added
+- Auto-loads last selected folder on startup — no need to re-select every time
+- Progressive metadata loading — file list appears instantly, quality/resolution/duration fill in as ffprobe processes each file in the background (6 concurrent)
+- 4-frame perceptual hashing for duplicate detection — samples at 10%, 30%, 50%, 70% of each video and averages the visual similarity across all frames
+- Thumbnail previews in the duplicates modal for visual comparison
+- Play button on each duplicate item — watch videos directly from the modal without losing your place
+- Dismiss button (✕) on each duplicate item to remove false positives from a group
+- Similarity percentage displayed per duplicate (e.g. "97% match")
+- Warning prompt if metadata hasn't finished loading when running duplicate scan
+
+### Changed
+- Removed loading overlay flash on startup — progress now shown in status bar only
+- Duplicates modal widened to 900px to accommodate thumbnails
+- Video player renders above duplicates modal (z-index 300) so previewing works seamlessly
+- Duplicate detection is significantly more accurate with multi-frame comparison
+
+### Fixed
+- Loading overlay no longer flashes repeatedly during app initialization
+
+---
+
 ## [1.4.0] - 2026-04-09
 
 ### Added

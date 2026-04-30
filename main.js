@@ -14,6 +14,7 @@ app.commandLine.appendSwitch('enable-hardware-overlays', 'single-fullscreen,sing
 app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization');
 
 const FAVORITES_FILE = path.join(app.getPath('userData'), 'favorites.json');
+const LAST_FOLDER_FILE = path.join(app.getPath('userData'), 'last-folder.json');
 const THUMB_CACHE_DIR = path.join(app.getPath('userData'), 'thumbnails');
 
 let mainWindow;
@@ -65,6 +66,22 @@ ipcMain.handle('get-favorites', () => loadFavorites());
 
 ipcMain.handle('set-favorites', (_, favs) => {
   saveFavorites(favs);
+  return true;
+});
+
+// --- Last folder persistence ---
+ipcMain.handle('get-last-folder', () => {
+  try {
+    if (fs.existsSync(LAST_FOLDER_FILE)) {
+      const folder = JSON.parse(fs.readFileSync(LAST_FOLDER_FILE, 'utf8'));
+      if (folder && fs.existsSync(folder)) return folder;
+    }
+  } catch (e) {}
+  return null;
+});
+
+ipcMain.handle('set-last-folder', (_, folder) => {
+  fs.writeFileSync(LAST_FOLDER_FILE, JSON.stringify(folder), 'utf8');
   return true;
 });
 
@@ -128,27 +145,66 @@ function getVideoMetadata(filePath) {
   });
 }
 
+// Phase 1: quick file-system scan — returns immediately with basic info
 ipcMain.handle('scan-folder', async (_, folderPath) => {
   const files = scanFolder(folderPath);
   const results = [];
 
   for (const filePath of files) {
-    const stat = fs.statSync(filePath);
-    const meta = await getVideoMetadata(filePath);
-    results.push({
-      path: filePath,
-      name: path.basename(filePath),
-      ext: path.extname(filePath).toLowerCase(),
-      size: stat.size,
-      modified: stat.mtimeMs,
-      width: meta ? meta.width : 0,
-      height: meta ? meta.height : 0,
-      quality: meta ? meta.quality : 'Unknown',
-      duration: meta ? meta.duration : 0
-    });
+    try {
+      const stat = fs.statSync(filePath);
+      results.push({
+        path: filePath,
+        name: path.basename(filePath),
+        ext: path.extname(filePath).toLowerCase(),
+        size: stat.size,
+        modified: stat.mtimeMs,
+        width: 0,
+        height: 0,
+        quality: 'Loading...',
+        duration: 0
+      });
+    } catch (e) {}
   }
 
   return results;
+});
+
+// Phase 2: progressive metadata extraction — sends updates as each file completes
+const META_CONCURRENCY = 6;
+
+ipcMain.handle('extract-metadata', async (_, filePaths) => {
+  let completed = 0;
+  const total = filePaths.length;
+
+  async function processFile(filePath) {
+    const meta = await getVideoMetadata(filePath);
+    completed++;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('metadata-update', {
+        path: filePath,
+        width: meta ? meta.width : 0,
+        height: meta ? meta.height : 0,
+        quality: meta ? meta.quality : 'Unknown',
+        duration: meta ? meta.duration : 0,
+        progress: Math.round((completed / total) * 100)
+      });
+    }
+  }
+
+  // Process in batches for concurrency
+  const queue = [...filePaths];
+  const workers = [];
+  for (let i = 0; i < META_CONCURRENCY; i++) {
+    workers.push((async () => {
+      while (queue.length > 0) {
+        const fp = queue.shift();
+        if (fp) await processFile(fp);
+      }
+    })());
+  }
+  await Promise.all(workers);
+  return true;
 });
 
 // --- Thumbnail extraction (with disk cache) ---
@@ -239,29 +295,154 @@ ipcMain.handle('delete-files', async (_, filePaths) => {
 });
 
 // --- Find duplicates ---
+// --- Perceptual hashing for duplicate detection ---
+
+// Extract a tiny 9x8 grayscale raw frame from a video at a given timestamp
+function extractHashFrame(filePath, timestamp) {
+  return new Promise((resolve) => {
+    execFile(ffmpegPath, [
+      '-ss', String(timestamp),
+      '-i', filePath,
+      '-frames:v', '1',
+      '-vf', 'scale=9:8,format=gray',
+      '-f', 'rawvideo',
+      '-pix_fmt', 'gray',
+      '-y',
+      'pipe:1'
+    ], { encoding: 'buffer', maxBuffer: 1024 * 1024 }, (err, stdout) => {
+      if (err || !stdout || stdout.length < 72) return resolve(null);
+      resolve(stdout);
+    });
+  });
+}
+
+// Compute dHash (difference hash) from 9x8 grayscale pixel buffer
+// Produces a 64-bit hash: compare each pixel to its right neighbor
+function computeDHash(pixelBuffer) {
+  let hash = BigInt(0);
+  let bit = 0;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const left = pixelBuffer[y * 9 + x];
+      const right = pixelBuffer[y * 9 + x + 1];
+      if (left > right) {
+        hash |= (BigInt(1) << BigInt(bit));
+      }
+      bit++;
+    }
+  }
+  return hash;
+}
+
+// Hamming distance between two 64-bit hashes
+function hammingDistance(a, b) {
+  let xor = a ^ b;
+  let dist = 0;
+  while (xor > 0n) {
+    dist += Number(xor & 1n);
+    xor >>= 1n;
+  }
+  return dist;
+}
+
+// --- Find duplicates ---
 ipcMain.handle('find-duplicates', async (_, videos) => {
-  // Group by duration (rounded to nearest second), then check size within a tolerance
-  const SIZE_TOLERANCE = 0.02; // 2% size difference allowed
+  const HASH_THRESHOLD = 10; // max hamming distance to consider a match
+  const DURATION_TOLERANCE = 2; // seconds
+
+  // Send progress updates
+  function sendProgress(msg) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('dup-progress', msg);
+    }
+  }
+
+  // Step 1: Group by similar duration (within tolerance)
+  sendProgress('Grouping by duration...');
   const durationGroups = {};
   for (const v of videos) {
-    const durKey = Math.round(v.duration);
+    if (!v.duration) continue; // skip if metadata not loaded yet
+    const durKey = Math.round(v.duration / DURATION_TOLERANCE) * DURATION_TOLERANCE;
     if (!durationGroups[durKey]) durationGroups[durKey] = [];
     durationGroups[durKey].push(v);
   }
 
+  // Filter to only groups with 2+ videos
+  const candidates = Object.values(durationGroups).filter(g => g.length > 1);
+  if (candidates.length === 0) return [];
+
+  // Step 2: Extract perceptual hashes at 4 timestamps per video (10%, 30%, 50%, 70%)
+  const SAMPLE_POINTS = [0.10, 0.30, 0.50, 0.70];
+  const allCandidates = candidates.flat();
+  sendProgress(`Extracting visual fingerprints for ${allCandidates.length} candidates...`);
+
+  const hashMap = new Map(); // path -> BigInt[] (array of 4 hashes)
+  const HASH_CONCURRENCY = 6;
+  let hashDone = 0;
+
+  async function hashFile(v) {
+    const hashes = [];
+    for (const pct of SAMPLE_POINTS) {
+      const ts = Math.max(v.duration * pct, 0.5);
+      const pixels = await extractHashFrame(v.path, ts);
+      if (pixels) {
+        hashes.push(computeDHash(pixels));
+      }
+    }
+    if (hashes.length > 0) {
+      hashMap.set(v.path, hashes);
+    }
+    hashDone++;
+    if (hashDone % 5 === 0 || hashDone === allCandidates.length) {
+      sendProgress(`Fingerprinting... ${hashDone}/${allCandidates.length}`);
+    }
+  }
+
+  // Process with concurrency
+  const queue = [...allCandidates];
+  const workers = [];
+  for (let i = 0; i < HASH_CONCURRENCY; i++) {
+    workers.push((async () => {
+      while (queue.length > 0) {
+        const v = queue.shift();
+        if (v) await hashFile(v);
+      }
+    })());
+  }
+  await Promise.all(workers);
+
+  // Step 3: Within each duration group, compare hashes across all 4 frames
+  sendProgress('Comparing fingerprints...');
   const duplicateGroups = [];
-  for (const vids of Object.values(durationGroups)) {
-    if (vids.length < 2) continue;
-    // Within same-duration group, cluster by similar size
+
+  // Compare two videos by averaging hamming distance across all shared sample frames
+  function compareHashes(hashesA, hashesB) {
+    const count = Math.min(hashesA.length, hashesB.length);
+    if (count === 0) return 999;
+    let totalDist = 0;
+    for (let k = 0; k < count; k++) {
+      totalDist += hammingDistance(hashesA[k], hashesB[k]);
+    }
+    return totalDist / count;
+  }
+
+  for (const group of candidates) {
     const used = new Set();
-    for (let i = 0; i < vids.length; i++) {
+    for (let i = 0; i < group.length; i++) {
       if (used.has(i)) continue;
-      const cluster = [vids[i]];
-      for (let j = i + 1; j < vids.length; j++) {
+      const hashesA = hashMap.get(group[i].path);
+      if (!hashesA) continue;
+
+      const cluster = [{ ...group[i], similarity: 100 }];
+      for (let j = i + 1; j < group.length; j++) {
         if (used.has(j)) continue;
-        const sizeDiff = Math.abs(vids[i].size - vids[j].size) / Math.max(vids[i].size, 1);
-        if (sizeDiff <= SIZE_TOLERANCE) {
-          cluster.push(vids[j]);
+        const hashesB = hashMap.get(group[j].path);
+        if (!hashesB) continue;
+
+        const avgDist = compareHashes(hashesA, hashesB);
+        if (avgDist <= HASH_THRESHOLD) {
+          const similarity = Math.round((1 - avgDist / 64) * 100);
+          cluster.push({ ...group[j], similarity });
           used.add(j);
         }
       }
@@ -271,6 +452,8 @@ ipcMain.handle('find-duplicates', async (_, videos) => {
       }
     }
   }
+
+  sendProgress('');
   return duplicateGroups;
 });
 

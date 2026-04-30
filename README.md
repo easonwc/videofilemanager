@@ -21,10 +21,12 @@ Video Manager lets you browse, organize, and play video files stored on your PC.
 - **Keyboard shortcuts** — ← → for prev/next, Space for play/pause, F for fullscreen, Escape to close
 - **Bulk rename** — rename selected files to UUID (keeps original extension)
 - **Bulk delete** — delete selected files with confirmation
-- **Duplicate detection** — finds duplicates by matching duration and file size (with 2% tolerance)
+- **Duplicate detection** — finds duplicates using 4-frame perceptual hashing with visual similarity scoring; preview, play, and dismiss directly from the results
 - **Auto-refresh** — automatically updates the list when files are added or removed from the watched folder
 - **Thumbnail caching** — extracted thumbnails are cached to disk for instant loading on subsequent visits
 - **Lazy loading** — grid thumbnails load on-demand as you scroll, keeping the UI fast with large libraries
+- **Remember last folder** — automatically loads your last selected folder on startup
+- **Progressive loading** — file list appears instantly, metadata fills in progressively in the background
 
 ---
 
@@ -112,6 +114,18 @@ William C Eason II — [willeason2@gmail.com](mailto:willeason2@gmail.com)
 ---
 
 ## Changelog
+
+### [1.5.0] - 2026-04-09
+**Added**
+- Auto-loads last selected folder on startup
+- Progressive metadata loading — file list appears instantly, metadata fills in background
+- 4-frame perceptual hashing for duplicate detection (10%, 30%, 50%, 70% of video)
+- Thumbnail previews and play buttons in duplicates modal
+- Dismiss button to remove false positives from duplicate groups
+- Visual similarity percentage per duplicate
+
+**Fixed**
+- Loading overlay no longer flashes on startup
 
 ### [1.4.0] - 2026-04-09
 **Added**
