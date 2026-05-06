@@ -9,6 +9,16 @@ let currentFolder = null;
 let currentView = 'list'; // 'list' | 'grid'
 let thumbnailCache = {};  // in-memory cache (path -> base64)
 let currentPlayerIndex = -1;
+let isOperationInProgress = false; // flag to suppress fs.watch during bulk ops
+
+// --- Debounce utility ---
+function debounce(fn, delay) {
+  let timer = null;
+  return (...args) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => { timer = null; fn(...args); }, delay);
+  };
+}
 
 // --- Thumbnail concurrency queue ---
 const THUMB_CONCURRENCY = 5;
@@ -166,7 +176,8 @@ async function loadVideos() {
             video.duration = data.duration;
           }
 
-          if (data.progress % 5 === 0 || data.progress === 100) {
+          // Only re-render at 25%, 50%, 75%, and 100% to avoid DOM thrashing
+          if (data.progress === 25 || data.progress === 50 || data.progress === 75 || data.progress === 100) {
             applyFiltersAndRender();
           }
 
@@ -187,9 +198,13 @@ async function loadVideos() {
   }
 }
 
-// Auto-refresh
+// Auto-refresh (debounced to prevent rapid-fire reloads)
+const debouncedReload = debounce(() => {
+  if (currentFolder && !isOperationInProgress) loadVideos();
+}, 1500);
+
 window.api.onFolderChanged(() => {
-  if (currentFolder) loadVideos();
+  debouncedReload();
 });
 
 // --- Filters & Sort ---
@@ -283,53 +298,52 @@ function renderList() {
   table.appendChild(tbody);
   videoListEl.appendChild(table);
 
-  // Check-all
+  // Event delegation — single listener on the table handles all interactions
   document.getElementById('check-all-list').addEventListener('change', (e) => {
     if (e.target.checked) filteredVideos.forEach(v => selectedPaths.add(v.path));
     else filteredVideos.forEach(v => selectedPaths.delete(v.path));
     applyFiltersAndRender();
   });
 
-  // Row checkboxes
-  videoListEl.querySelectorAll('.row-check').forEach(cb => {
-    cb.addEventListener('change', (e) => {
+  videoListEl.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // Play button
+    if (target.classList.contains('play-btn')) {
       e.stopPropagation();
-      const p = e.target.dataset.path;
-      if (e.target.checked) selectedPaths.add(p);
+      openPlayer(parseInt(target.dataset.index));
+      return;
+    }
+
+    // Favorite button
+    if (target.classList.contains('fav-btn')) {
+      e.stopPropagation();
+      toggleFavorite(target.dataset.path);
+      return;
+    }
+
+    // Checkbox
+    if (target.classList.contains('row-check')) {
+      const p = target.dataset.path;
+      if (target.checked) selectedPaths.add(p);
       else selectedPaths.delete(p);
       updateActionBar();
-      const row = e.target.closest('tr');
+      const row = target.closest('tr');
       row.className = selectedPaths.has(p) ? 'selected' : '';
-    });
-  });
+      return;
+    }
 
-  // Row click to select
-  videoListEl.querySelectorAll('tbody tr').forEach(tr => {
-    tr.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+    // Row click (not on input/button)
+    const tr = target.closest('tr');
+    if (tr && tr.dataset.path) {
       const p = tr.dataset.path;
       if (selectedPaths.has(p)) selectedPaths.delete(p);
       else selectedPaths.add(p);
       tr.className = selectedPaths.has(p) ? 'selected' : '';
-      tr.querySelector('.row-check').checked = selectedPaths.has(p);
+      const cb = tr.querySelector('.row-check');
+      if (cb) cb.checked = selectedPaths.has(p);
       updateActionBar();
-    });
-  });
-
-  // Play buttons
-  videoListEl.querySelectorAll('.play-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openPlayer(parseInt(btn.dataset.index));
-    });
-  });
-
-  // Favorite buttons
-  videoListEl.querySelectorAll('.fav-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleFavorite(btn.dataset.path);
-    });
+    }
   });
 }
 
@@ -438,6 +452,7 @@ btnRenameUuid.addEventListener('click', async () => {
   if (selectedPaths.size === 0) return;
   const confirm = window.confirm(`Rename ${selectedPaths.size} file(s) to UUID? This cannot be undone.`);
   if (!confirm) return;
+  isOperationInProgress = true;
   showLoading('Renaming files...');
   const results = await window.api.renameToUuid([...selectedPaths]);
   selectedPaths.clear();
@@ -451,6 +466,7 @@ btnRenameUuid.addEventListener('click', async () => {
   await saveFavorites();
   await loadVideos();
   hideLoading();
+  isOperationInProgress = false;
   const failed = results.filter(r => !r.success).length;
   setStatus(`Renamed ${results.length - failed} file(s).${failed ? ` ${failed} failed.` : ''}`);
 });
@@ -460,11 +476,13 @@ btnDelete.addEventListener('click', async () => {
   if (selectedPaths.size === 0) return;
   const confirm = window.confirm(`Delete ${selectedPaths.size} file(s)? This cannot be undone.`);
   if (!confirm) return;
+  isOperationInProgress = true;
   showLoading('Deleting files...');
   const results = await window.api.deleteFiles([...selectedPaths]);
   selectedPaths.clear();
   await loadVideos();
   hideLoading();
+  isOperationInProgress = false;
   const failed = results.filter(r => !r.success).length;
   setStatus(`Deleted ${results.length - failed} file(s).${failed ? ` ${failed} failed.` : ''}`);
 });
